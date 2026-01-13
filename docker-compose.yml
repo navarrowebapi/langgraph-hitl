@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   qdrant:
     image: qdrant/qdrant:latest
@@ -12,8 +10,34 @@ services:
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
     restart: unless-stopped
+    networks:
+      - langgraph-network
+
+  langgraph-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: langgraph-api
+    ports:
+      - "8000:8000"  # API FastAPI
+      - "5678:5678"  # Porta de debug remoto (debugpy)
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - QDRANT_COLLECTION_NAME=empresa_m_regras
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src  # Para desenvolvimento com hot-reload
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+    networks:
+      - langgraph-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -22,3 +46,7 @@ services:
 volumes:
   qdrant_storage:
     driver: local
+
+networks:
+  langgraph-network:
+    driver: bridge

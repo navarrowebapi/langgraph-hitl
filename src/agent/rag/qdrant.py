@@ -1,12 +1,17 @@
+import os
 from qdrant_client import QdrantClient
 from langchain_openai import OpenAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from langchain_core.documents import Document
+from dotenv import load_dotenv
 
-# Configurações
-QDRANT_HOST = "localhost"
-QDRANT_PORT = 6333
-COLLECTION_NAME = "empresa_m_regras"
+# Carregar variáveis de ambiente do arquivo .env
+load_dotenv()
+
+# Configurações - usando variáveis de ambiente para produção
+QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "empresa_m_regras")
 
 # Embeddings (lazy)
 _embeddings = None
