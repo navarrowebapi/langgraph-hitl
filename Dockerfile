@@ -39,6 +39,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Comando para iniciar a API com debugpy
-# --wait-for-client: aguarda conexão do debugger antes de iniciar
-# Remova --wait-for-client se quiser que a API inicie normalmente e você conecte depois
-CMD ["python", "-m", "debugpy", "--listen", "0.0.0.0:5678", "--wait-for-client", "-m", "uvicorn", "agent.api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Sem --wait-for-client, a API inicia normalmente e o debugger pode conectar depois
+CMD ["python", "-m", "debugpy", "--listen", "0.0.0.0:5678", "-m", "uvicorn", "agent.api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

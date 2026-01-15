@@ -1,6 +1,7 @@
 """
 API FastAPI para expor o grafo LangGraph
 """
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -15,18 +16,34 @@ if os.path.dirname(__file__) not in sys.path:
 
 from agent.graph.graph import builder
 from agent.graph.state import WorkflowState
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
 
-# Configurar checkpoint para manter estado entre execuções (necessário para HITL)
-memory = MemorySaver()
-# Compilar o grafo com checkpoint (o builder ainda não foi compilado)
-graph_with_checkpoint = builder.compile(checkpointer=memory)
+def _build_postgres_uri() -> str:
+    """Obtém a URI do Postgres a partir do ambiente."""
+    direct_uri = os.getenv("POSTGRES_URL") or os.getenv("DATABASE_URL")
+    if not direct_uri:
+        raise RuntimeError(
+            "POSTGRES_URL/DATABASE_URL não configurado. "
+            "Defina a URI completa do banco no ambiente."
+        )
+    return direct_uri
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Inicializa o checkpointer Postgres e compila o grafo."""
+    db_uri = _build_postgres_uri()
+    async with AsyncPostgresSaver.from_conn_string(db_uri) as checkpointer:
+        await checkpointer.setup()
+        app.state.graph = builder.compile(checkpointer=checkpointer)
+        yield
 
 app = FastAPI(
     title="LangGraph Agent API",
     description="API para interagir com o agente LangGraph",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Configurar CORS
@@ -66,6 +83,16 @@ class HealthResponse(BaseModel):
     """Resposta de health check"""
     status: str
     message: str
+
+
+def _get_graph():
+    graph = getattr(app.state, "graph", None)
+    if graph is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Grafo não inicializado. Verifique a conexão com o Postgres."
+        )
+    return graph
 
 
 @app.get("/", response_model=HealthResponse)
@@ -117,8 +144,8 @@ async def invoke_agent(request: AgentRequest):
         config = request.config or {}
         config["configurable"] = {"thread_id": thread_id}
         
-        # Invocar o grafo com checkpoint (necessário para HITL)
-        result = await graph_with_checkpoint.ainvoke(initial_state, config=config)
+        graph = _get_graph()
+        result = await graph.ainvoke(initial_state, config=config)
         
         # Verificar se há interrupt (HITL)
         interrupt_info = None
@@ -187,8 +214,8 @@ async def stream_agent(request: AgentRequest):
         config = request.config or {}
         config["configurable"] = {"thread_id": thread_id}
         
-        # Stream do grafo com checkpoint
-        async for event in graph_with_checkpoint.astream(initial_state, config=config):
+        graph = _get_graph()
+        async for event in graph.astream(initial_state, config=config):
             yield {
                 "event": event,
                 "status": "streaming",
@@ -225,7 +252,8 @@ async def human_decision(request: HumanDecisionRequest):
         config = {"configurable": {"thread_id": request.thread_id}}
         
         # Obter o estado atual do checkpoint
-        state = await graph_with_checkpoint.aget_state(config)
+        graph = _get_graph()
+        state = await graph.aget_state(config)
         
         if not state:
             raise HTTPException(
@@ -267,7 +295,7 @@ async def human_decision(request: HumanDecisionRequest):
         decision_value = {"approved": request.approved}
         
         # Continuar a execução usando Command
-        result = await graph_with_checkpoint.ainvoke(
+        result = await graph.ainvoke(
             Command(resume=decision_value),
             config=config
         )
@@ -328,7 +356,8 @@ async def get_thread_state(thread_id: str):
     """
     try:
         config = {"configurable": {"thread_id": thread_id}}
-        state = await graph_with_checkpoint.aget_state(config)
+        graph = _get_graph()
+        state = await graph.aget_state(config)
         
         if not state:
             raise HTTPException(

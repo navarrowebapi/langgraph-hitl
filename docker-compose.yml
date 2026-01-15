@@ -1,4 +1,28 @@
 services:
+  db:
+    image: postgres:17
+    container_name: db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - langgraph-network
+
+  adminer:
+    image: adminer
+    container_name: adminer
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    networks:
+      - langgraph-network
+
   qdrant:
     image: qdrant/qdrant:latest
     container_name: qdrant
@@ -22,6 +46,7 @@ services:
       - "8000:8000"  # API FastAPI
       - "5678:5678"  # Porta de debug remoto (debugpy)
     environment:
+      - POSTGRES_URL=${POSTGRES_URL}
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - QDRANT_COLLECTION_NAME=empresa_m_regras
@@ -32,6 +57,7 @@ services:
     volumes:
       - ./src:/app/src  # Para desenvolvimento com hot-reload
     depends_on:
+      - db
       - qdrant
     restart: unless-stopped
     networks:
@@ -44,6 +70,8 @@ services:
       start_period: 40s
 
 volumes:
+  db_data:
+    driver: local
   qdrant_storage:
     driver: local
 
