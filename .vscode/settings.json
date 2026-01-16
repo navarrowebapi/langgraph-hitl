@@ -1,4 +1,8 @@
 {
+  "git.enabled": false,
+  "git.autorefresh": false,
+  "git.autofetch": false,
+  "git.autoRepositoryDetection": false,
   "python.defaultInterpreterPath": "C:\\Users\\f.navarro\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
   "python.analysis.extraPaths": [
     "${workspaceFolder}/src"

@@ -14,6 +14,7 @@ import uuid
 if os.path.dirname(__file__) not in sys.path:
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
+from agent.audit import insert_event, setup_audit_tables, upsert_request
 from agent.graph.graph import builder
 from agent.graph.state import WorkflowState
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -37,6 +38,8 @@ async def lifespan(app: FastAPI):
     async with AsyncPostgresSaver.from_conn_string(db_uri) as checkpointer:
         await checkpointer.setup()
         app.state.graph = builder.compile(checkpointer=checkpointer)
+        app.state.db_uri = db_uri
+        await setup_audit_tables(db_uri)
         yield
 
 app = FastAPI(
@@ -61,6 +64,7 @@ class AgentRequest(BaseModel):
     input_text: str
     config: Optional[dict] = None
     thread_id: Optional[str] = None  # ID do thread para continuar execução
+    requester_id: Optional[str] = None
 
 
 class HumanDecisionRequest(BaseModel):
@@ -93,6 +97,16 @@ def _get_graph():
             detail="Grafo não inicializado. Verifique a conexão com o Postgres."
         )
     return graph
+
+
+def _get_db_uri():
+    db_uri = getattr(app.state, "db_uri", None)
+    if not db_uri:
+        raise HTTPException(
+            status_code=503,
+            detail="Banco de auditoria não inicializado. Verifique o Postgres."
+        )
+    return db_uri
 
 
 @app.get("/", response_model=HealthResponse)
@@ -143,7 +157,23 @@ async def invoke_agent(request: AgentRequest):
         # Configuração com thread_id para checkpoint
         config = request.config or {}
         config["configurable"] = {"thread_id": thread_id}
-        
+
+        db_uri = _get_db_uri()
+        await upsert_request(
+            db_uri=db_uri,
+            thread_id=thread_id,
+            requester_id=request.requester_id,
+            input_text=request.input_text,
+            status="started",
+            last_node="interpret",
+        )
+        await insert_event(
+            db_uri=db_uri,
+            thread_id=thread_id,
+            event_type="invoke",
+            payload={"input_text": request.input_text},
+        )
+
         graph = _get_graph()
         result = await graph.ainvoke(initial_state, config=config)
         
@@ -170,6 +200,23 @@ async def invoke_agent(request: AgentRequest):
                 elif isinstance(interrupt_obj, dict) and "id" in interrupt_obj:
                     interrupt_info["interrupt_id"] = interrupt_obj["id"]
         
+        status = "hitl_pending" if requires_human else "completed"
+        last_node = "hitl" if requires_human else "finalize"
+        await upsert_request(
+            db_uri=db_uri,
+            thread_id=thread_id,
+            requester_id=request.requester_id,
+            input_text=request.input_text,
+            status=status,
+            last_node=last_node,
+        )
+        await insert_event(
+            db_uri=db_uri,
+            thread_id=thread_id,
+            event_type="invoke_complete",
+            payload={"requires_human_decision": requires_human},
+        )
+
         return AgentResponse(
             result=result,
             status="success",
@@ -250,6 +297,22 @@ async def human_decision(request: HumanDecisionRequest):
     try:
         # Configuração com thread_id
         config = {"configurable": {"thread_id": request.thread_id}}
+
+        db_uri = _get_db_uri()
+        await upsert_request(
+            db_uri=db_uri,
+            thread_id=request.thread_id,
+            requester_id=None,
+            input_text=None,
+            status="hitl_pending",
+            last_node="hitl",
+        )
+        await insert_event(
+            db_uri=db_uri,
+            thread_id=request.thread_id,
+            event_type="hitl_decide",
+            payload={"approved": request.approved},
+        )
         
         # Obter o estado atual do checkpoint
         graph = _get_graph()
@@ -321,6 +384,23 @@ async def human_decision(request: HumanDecisionRequest):
                     interrupt_info["interrupt_id"] = interrupt_obj.id
                 elif isinstance(interrupt_obj, dict) and "id" in interrupt_obj:
                     interrupt_info["interrupt_id"] = interrupt_obj["id"]
+
+        status = "hitl_pending" if requires_human else "completed"
+        last_node = "hitl" if requires_human else "finalize"
+        await upsert_request(
+            db_uri=db_uri,
+            thread_id=request.thread_id,
+            requester_id=None,
+            input_text=None,
+            status=status,
+            last_node=last_node,
+        )
+        await insert_event(
+            db_uri=db_uri,
+            thread_id=request.thread_id,
+            event_type="resume_complete",
+            payload={"requires_human_decision": requires_human},
+        )
         
         return AgentResponse(
             result=result,
