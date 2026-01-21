@@ -72,6 +72,7 @@ class HumanDecisionRequest(BaseModel):
     thread_id: str
     approved: bool
     interrupt_id: Optional[str] = None  # ID do interrupt específico (opcional)
+    notes: Optional[str] = None  # Observações do humano (opcional)
 
 
 class AgentResponse(BaseModel):
@@ -146,12 +147,19 @@ async def invoke_agent(request: AgentRequest):
         # Preparar o estado inicial
         initial_state: WorkflowState = {
             "input_text": request.input_text,
+            "user_id": None,
+            "case_id": None,
             "intent": "",
             "entities": {},
             "retrieved_context": "",
+            "retrieved_rules": None,
             "decision": "auto",
+            "decision_evidence": None,
+            "decision_reasoning": None,
             "human_decision": None,
-            "final_result": ""
+            "human_notes": None,
+            "final_result": "",
+            "final_result_dict": None
         }
         
         # Configuração com thread_id para checkpoint
@@ -249,18 +257,25 @@ async def stream_agent(request: AgentRequest):
         # Preparar o estado inicial
         initial_state: WorkflowState = {
             "input_text": request.input_text,
+            "user_id": None,
+            "case_id": None,
             "intent": "",
             "entities": {},
             "retrieved_context": "",
+            "retrieved_rules": None,
             "decision": "auto",
+            "decision_evidence": None,
+            "decision_reasoning": None,
             "human_decision": None,
-            "final_result": ""
+            "human_notes": None,
+            "final_result": "",
+            "final_result_dict": None
         }
         
         # Configuração com thread_id para checkpoint
         config = request.config or {}
         config["configurable"] = {"thread_id": thread_id}
-        
+
         graph = _get_graph()
         async for event in graph.astream(initial_state, config=config):
             yield {
@@ -325,39 +340,72 @@ async def human_decision(request: HumanDecisionRequest):
             )
         
         # Verificar se há interrupt pendente
-        # O LangGraph armazena interrupts em state.tasks quando há checkpoint
-        # state.tasks é uma lista de tarefas/interrupts pendentes
+        # O LangGraph com checkpoint armazena interrupts de várias formas
         has_interrupt = False
+        interrupt_details = []
         
-        # Verificar em state.tasks (onde o LangGraph armazena interrupts pendentes)
+        state_values = state.values if state.values else {}
+        next_nodes = state.next if hasattr(state, 'next') else []
+        
+        # Método 1: Verificar em state.tasks (onde o LangGraph armazena interrupts pendentes)
         if hasattr(state, 'tasks') and state.tasks and len(state.tasks) > 0:
             has_interrupt = True
-        # Verificar em state.values["__interrupt__"] (formato retornado pelo ainvoke)
-        elif state.values and state.values.get("__interrupt__"):
+            interrupt_details.append(f"Encontrado em state.tasks: {len(state.tasks)} tarefas")
+        
+        # Método 2: Verificar em state.values["__interrupt__"] (formato retornado pelo ainvoke)
+        elif state_values.get("__interrupt__"):
             has_interrupt = True
-        # Verificar se está aguardando HITL (inferência baseada no estado do workflow)
-        else:
-            state_values = state.values if state.values else {}
-            next_nodes = state.next if hasattr(state, 'next') else []
-            # Se o próximo nó é "hitl" e human_decision é None, há um interrupt pendente
-            is_waiting_for_hitl = (
-                "hitl" in next_nodes and 
-                state_values.get("human_decision") is None and
-                state_values.get("decision") == "hitl"
-            )
-            has_interrupt = is_waiting_for_hitl
+            interrupt_details.append("Encontrado em state.values['__interrupt__']")
+        
+        # Método 3: Verificar se está aguardando HITL (inferência baseada no estado do workflow)
+        # Se o próximo nó é "hitl" e human_decision é None, há um interrupt pendente
+        elif "hitl" in next_nodes and state_values.get("human_decision") is None and state_values.get("decision") == "hitl":
+            has_interrupt = True
+            interrupt_details.append("Inferido: próximo nó é 'hitl' e human_decision é None")
+        
+        # Método 4: Verificar se há tasks pendentes usando get_state com include_next
+        if not has_interrupt:
+            try:
+                # Tentar obter estado com mais detalhes
+                detailed_state = await graph.aget_state(config, include_next=["hitl"])
+                if detailed_state and hasattr(detailed_state, 'tasks') and detailed_state.tasks:
+                    has_interrupt = True
+                    interrupt_details.append("Encontrado via get_state com include_next")
+            except Exception:
+                pass
+        
+        # Se ainda não encontrou, verificar se o estado indica que está no nó hitl
+        if not has_interrupt:
+            # Se decision é "hitl" e human_decision é None, assumir que há interrupt
+            if state_values.get("decision") == "hitl" and state_values.get("human_decision") is None:
+                has_interrupt = True
+                interrupt_details.append("Inferido: decision='hitl' e human_decision=None")
         
         if not has_interrupt:
+            # Retornar informações de debug úteis
+            debug_info = {
+                "thread_id": request.thread_id,
+                "has_tasks": hasattr(state, 'tasks') and bool(state.tasks) if hasattr(state, 'tasks') else False,
+                "has_interrupt_in_values": bool(state_values.get("__interrupt__")),
+                "next_nodes": list(next_nodes) if next_nodes else [],
+                "decision": state_values.get("decision"),
+                "human_decision": state_values.get("human_decision"),
+                "state_keys": list(state_values.keys()) if state_values else []
+            }
             raise HTTPException(
                 status_code=400,
-                detail="Não há interrupt pendente para este thread"
+                detail=f"Não há interrupt pendente para este thread. Debug: {debug_info}"
             )
         
         # Para continuar após um interrupt, precisamos usar Command com resume
         # O valor passado em resume se torna o retorno do interrupt()
+        # Incluir notes se fornecido
         decision_value = {"approved": request.approved}
+        if hasattr(request, 'notes') and request.notes:
+            decision_value["notes"] = request.notes
         
         # Continuar a execução usando Command
+        # Com checkpoint, o Command resume o interrupt pendente
         result = await graph.ainvoke(
             Command(resume=decision_value),
             config=config

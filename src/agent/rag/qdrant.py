@@ -42,10 +42,28 @@ def _get_vector_store():
     """Retorna vector store (singleton, lazy initialization)"""
     global _vector_store
     if _vector_store is None:
+        client = _get_client()
+        embeddings = _get_embeddings()
+        
+        # Verificar se a coleção existe, se não existir criar
+        try:
+            client.get_collection(COLLECTION_NAME)
+        except Exception:
+            # Coleção não existe, criar automaticamente
+            from qdrant_client.models import Distance, VectorParams
+            client.create_collection(
+                collection_name=COLLECTION_NAME,
+                vectors_config=VectorParams(
+                    size=1536,  # text-embedding-3-small tem 1536 dimensões
+                    distance=Distance.COSINE
+                )
+            )
+        
+        # QdrantVectorStore agora pode ser criado com a coleção existente
         _vector_store = QdrantVectorStore(
-            client=_get_client(),
+            client=client,
             collection_name=COLLECTION_NAME,
-            embedding=_get_embeddings()
+            embedding=embeddings
         )
     return _vector_store
 
@@ -71,7 +89,39 @@ def search_docs(query: str, k: int = 4) -> str:
     """
     Busca semântica no Qdrant
     Retorna texto concatenado (RAG-friendly)
+    Mantido para compatibilidade com código existente
     """
     results = _get_vector_store().similarity_search(query, k=k)
 
     return "\n\n".join([doc.page_content for doc in results])
+
+
+def search_docs_with_metadata(query: str, k: int = 5) -> list[Document]:
+    """
+    Busca semântica no Qdrant com metadados completos
+    Retorna lista de Document com page_content e metadata incluindo score
+    
+    Args:
+        query: Texto de busca semântica
+        k: Número de resultados a retornar
+        
+    Returns:
+        Lista de Document com metadados completos (source, section, rule_id, etc)
+    """
+    try:
+        # Usar similarity_search_with_score para obter scores de relevância
+        results = _get_vector_store().similarity_search_with_score(query, k=k)
+        
+        docs_with_metadata = []
+        for doc, score in results:
+            # Adicionar score aos metadados
+            doc.metadata["score"] = float(score)
+            docs_with_metadata.append(doc)
+        
+        return docs_with_metadata
+    except Exception as e:
+        # Se similarity_search_with_score não estiver disponível, usar fallback
+        results = _get_vector_store().similarity_search(query, k=k)
+        for doc in results:
+            doc.metadata["score"] = 0.0  # Score padrão se não disponível
+        return results

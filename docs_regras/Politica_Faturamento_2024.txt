@@ -1,0 +1,50 @@
+POLÍTICA DE FATURAMENTO - 2024
+Operadora de Planos de Saúde XYZ
+
+===========================================
+SEÇÃO 1: APROVAÇÃO DE FATURAMENTO
+===========================================
+
+REGRA FAT-001: Procedimentos com valor acima de R$ 500,00 requerem aprovação humana antes do faturamento. Esta regra se aplica a todos os planos, exceto planos premium que possuem limite de R$ 1.000,00.
+
+REGRA FAT-002: Planos premium com procedimentos acima de R$ 1.000,00 devem passar por auditoria prévia. A auditoria deve ser concluída em até 48 horas após a solicitação.
+
+REGRA FAT-003: Procedimentos de urgência e emergência não requerem aprovação prévia, independente do valor, mas devem ser auditados posteriormente.
+
+REGRA FAT-004: Para procedimentos entre R$ 200,00 e R$ 500,00, a aprovação pode ser automática se o beneficiário tiver histórico de pagamento em dia nos últimos 6 meses.
+
+===========================================
+SEÇÃO 2: COBERTURA DE PROCEDIMENTOS
+===========================================
+
+REGRA COB-001: Procedimento código 3344 (Consulta Cardiológica) é coberto para todos os planos. Não requer autorização prévia.
+
+REGRA COB-002: Procedimento código 5566 (Exame de Sangue Completo) requer autorização prévia para planos básicos, mas é automático para planos premium e empresariais.
+
+REGRA COB-003: Procedimentos de alta complexidade (códigos acima de 8000) sempre requerem aprovação médica prévia, independente do plano.
+
+REGRA COB-004: Medicamentos de alto custo (acima de R$ 500,00 por unidade) requerem aprovação do comitê médico e análise de protocolo clínico.
+
+===========================================
+SEÇÃO 3: REGRAS DE AUDITORIA
+===========================================
+
+REGRA AUD-001: Casos com valor total acima de R$ 2.000,00 devem passar por auditoria completa antes do faturamento.
+
+REGRA AUD-002: Procedimentos realizados fora da área de cobertura do plano requerem justificativa médica e aprovação especial.
+
+REGRA AUD-003: Beneficiários com mais de 3 procedimentos no mesmo mês devem ter seus casos revisados pela equipe de auditoria.
+
+REGRA AUD-004: Casos que foram rejeitados anteriormente e estão sendo reenviados devem passar por revisão manual obrigatória.
+
+===========================================
+SEÇÃO 4: QUEM PAGA
+===========================================
+
+REGRA PAG-001: Procedimentos cobertos pelo plano são pagos pela operadora, exceto coparticipação quando aplicável.
+
+REGRA PAG-002: Coparticipação de 20% aplica-se a consultas e exames para planos básicos. Planos premium têm coparticipação de 10%.
+
+REGRA PAG-003: Procedimentos não cobertos ou realizados fora da rede credenciada são de responsabilidade do beneficiário.
+
+REGRA PAG-004: Em casos de urgência/emergência fora da área de cobertura, a operadora cobre 80% do valor, sendo 20% de responsabilidade do beneficiário.
