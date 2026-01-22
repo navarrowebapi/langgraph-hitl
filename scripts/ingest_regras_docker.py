@@ -26,15 +26,29 @@ if sys.platform == "win32":
 src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
-# Carregar variáveis de ambiente do .env se existir
-from dotenv import load_dotenv
-load_dotenv()
+# IMPORTANTE: Setar variáveis ANTES de carregar .env ou importar qualquer módulo
+# Isso garante que as variáveis sejam lidas corretamente pelo qdrant.py
 
-# Usar variáveis de ambiente do Docker Compose ou padrões
+# Ler variáveis de ambiente primeiro (pode vir da linha de comando)
 QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 
+# Garantir que as variáveis estejam setadas no ambiente
+os.environ["QDRANT_HOST"] = QDRANT_HOST
+os.environ["QDRANT_PORT"] = str(QDRANT_PORT)
+
+# Agora carregar .env (pode sobrescrever se necessário)
+from dotenv import load_dotenv
+load_dotenv()
+
+# Re-ler após carregar .env (caso tenha sido sobrescrito)
+QDRANT_HOST = os.getenv("QDRANT_HOST", QDRANT_HOST)
+QDRANT_PORT = int(os.getenv("QDRANT_PORT", QDRANT_PORT))
+os.environ["QDRANT_HOST"] = QDRANT_HOST
+os.environ["QDRANT_PORT"] = str(QDRANT_PORT)
+
 print(f"Conectando no Qdrant: {QDRANT_HOST}:{QDRANT_PORT}")
+print(f"Variáveis de ambiente: QDRANT_HOST={os.environ.get('QDRANT_HOST')}, QDRANT_PORT={os.environ.get('QDRANT_PORT')}")
 
 # Verificar se OPENAI_API_KEY está configurada
 if not os.getenv("OPENAI_API_KEY"):
@@ -53,6 +67,23 @@ qdrant_spec = importlib.util.spec_from_file_location(
 )
 qdrant_module = importlib.util.module_from_spec(qdrant_spec)
 qdrant_spec.loader.exec_module(qdrant_module)
+
+# Resetar conexões para garantir que use as variáveis corretas
+if hasattr(qdrant_module, '_reset_connections'):
+    qdrant_module._reset_connections()
+    print("✅ Conexões resetadas para usar variáveis corretas")
+
+# Testar conexão
+try:
+    test_client = qdrant_module._get_client()
+    collections = test_client.get_collections()
+    print(f"✅ Conexão estabelecida! Coleções encontradas: {len(collections.collections)}")
+    for col in collections.collections:
+        print(f"   - {col.name}")
+except Exception as e:
+    print(f"❌ Erro ao conectar no Qdrant: {e}")
+    print(f"   Verifique se o Qdrant está rodando em {QDRANT_HOST}:{QDRANT_PORT}")
+    sys.exit(1)
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
@@ -100,6 +131,7 @@ def main():
         "page": "1",
         "line_range": "5-6",
         "tipo_regra": "faturamento",
+        "domain": "faturamento",  # Domain Routing: faturamento
         "updated_at": "2024-01-15T10:00:00Z",
         "valid_from": "2024-01-01T00:00:00Z",
         "departamento": "Faturamento"
@@ -124,6 +156,7 @@ def main():
         "page": "1",
         "line_range": "7-8",
         "tipo_regra": "auditoria",
+        "domain": "faturamento",  # Domain Routing: faturamento (auditoria de faturamento)
         "updated_at": "2024-01-15T10:00:00Z",
         "valid_from": "2024-01-01T00:00:00Z",
         "departamento": "Faturamento"
@@ -148,6 +181,7 @@ def main():
         "page": "1",
         "line_range": "9-10",
         "tipo_regra": "faturamento",
+        "domain": "faturamento",  # Domain Routing: faturamento
         "updated_at": "2024-01-15T10:00:00Z",
         "valid_from": "2024-01-01T00:00:00Z",
         "departamento": "Faturamento"
@@ -172,6 +206,7 @@ def main():
         "page": "2",
         "line_range": "15-16",
         "tipo_regra": "cobertura",
+        "domain": "planos_e_cobertura",  # Domain Routing: planos_e_cobertura
         "updated_at": "2024-01-10T14:30:00Z",
         "valid_from": "2024-01-01T00:00:00Z",
         "departamento": "Cobertura"
@@ -196,6 +231,7 @@ def main():
         "page": "2",
         "line_range": "17-18",
         "tipo_regra": "cobertura",
+        "domain": "planos_e_cobertura",  # Domain Routing: planos_e_cobertura
         "updated_at": "2024-01-10T14:30:00Z",
         "valid_from": "2024-01-01T00:00:00Z",
         "departamento": "Cobertura"
@@ -219,6 +255,7 @@ def main():
         "page": "3",
         "line_range": "23-24",
         "tipo_regra": "auditoria",
+        "domain": "faturamento",  # Domain Routing: faturamento (auditoria de faturamento)
         "updated_at": "2024-01-15T10:00:00Z",
         "valid_from": "2024-01-01T00:00:00Z",
         "departamento": "Auditoria"
@@ -243,6 +280,7 @@ def main():
         "page": "1",
         "line_range": "5-6",
         "tipo_regra": "cobertura",
+        "domain": "planos_e_cobertura",  # Domain Routing: planos_e_cobertura
         "updated_at": "2024-01-01T00:00:00Z",
         "valid_from": "2024-01-01T00:00:00Z",
         "departamento": "Cobertura"
@@ -267,6 +305,7 @@ def main():
         "page": "2",
         "line_range": "10-11",
         "tipo_regra": "faturamento",
+        "domain": "faturamento",  # Domain Routing: faturamento
         "updated_at": "2024-01-01T00:00:00Z",
         "valid_from": "2024-01-01T00:00:00Z",
         "departamento": "Faturamento"

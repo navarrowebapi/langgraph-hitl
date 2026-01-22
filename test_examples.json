@@ -1,0 +1,163 @@
+{
+  "exemplos_teste": [
+    {
+      "nome": "Teste 1 - Faturamento com valor alto (deve acionar HITL)",
+      "descricao": "Testa detecção de domínio 'faturamento' e regras que requerem aprovação humana",
+      "request": {
+        "input_text": "User: 123abc, preciso faturar um procedimento código 3344 com valor total de R$ 800,00 para o plano premium",
+        "user_id": "123abc",
+        "case_id": "CASE-2026-001",
+        "requester_id": "test_user"
+      },
+      "esperado": {
+        "domain": "faturamento",
+        "deve_acionar_hitl": true,
+        "motivo": "Valor acima de R$ 500 requer aprovação"
+      }
+    },
+    {
+      "nome": "Teste 2 - Faturamento com valor baixo (deve ser auto)",
+      "descricao": "Testa aprovação automática para valores dentro do limite",
+      "request": {
+        "input_text": "User: 456def, procedimento 5566, valor total R$ 300, plano básico",
+        "user_id": "456def",
+        "case_id": "CASE-2026-002",
+        "requester_id": "test_user"
+      },
+      "esperado": {
+        "domain": "faturamento",
+        "deve_acionar_hitl": false,
+        "motivo": "Valor dentro do limite para aprovação automática"
+      }
+    },
+    {
+      "nome": "Teste 3 - Planos e Cobertura",
+      "descricao": "Testa detecção de domínio 'planos_e_cobertura' e busca de regras de cobertura",
+      "request": {
+        "input_text": "O procedimento 3344 está coberto pelo plano premium? Qual a cobertura para este procedimento?",
+        "user_id": "789ghi",
+        "case_id": "CASE-2026-003",
+        "requester_id": "test_user"
+      },
+      "esperado": {
+        "domain": "planos_e_cobertura",
+        "deve_buscar_regras": "Regras de cobertura de procedimentos"
+      }
+    },
+    {
+      "nome": "Teste 4 - Atendimento (Reclamação)",
+      "descricao": "Testa detecção de domínio 'atendimento'",
+      "request": {
+        "input_text": "Preciso contestar uma fatura que foi emitida incorretamente. Tenho uma reclamação sobre o valor cobrado.",
+        "user_id": "111aaa",
+        "case_id": "CASE-2026-004",
+        "requester_id": "test_user"
+      },
+      "esperado": {
+        "domain": "atendimento",
+        "motivo": "Palavras-chave: contestar, reclamação"
+      }
+    },
+    {
+      "nome": "Teste 5 - Jurídico",
+      "descricao": "Testa detecção de domínio 'juridico'",
+      "request": {
+        "input_text": "Preciso de informações sobre o contrato do plano. Qual a base legal para esta cobrança?",
+        "user_id": "222bbb",
+        "case_id": "CASE-2026-005",
+        "requester_id": "test_user"
+      },
+      "esperado": {
+        "domain": "juridico",
+        "motivo": "Palavras-chave: contrato, legal"
+      }
+    },
+    {
+      "nome": "Teste 6 - Cadastro",
+      "descricao": "Testa detecção de domínio 'cadastro'",
+      "request": {
+        "input_text": "Preciso atualizar meu cadastro. Quero alterar meu endereço e dados pessoais.",
+        "user_id": "333ccc",
+        "case_id": "CASE-2026-006",
+        "requester_id": "test_user"
+      },
+      "esperado": {
+        "domain": "cadastro",
+        "motivo": "Palavras-chave: cadastro, atualizar, alterar"
+      }
+    },
+    {
+      "nome": "Teste 7 - Faturamento Premium (limite maior)",
+      "descricao": "Testa regra específica para planos premium com limite de R$ 1000",
+      "request": {
+        "input_text": "User: 444ddd, procedimento 3344 e 5566, valor total R$ 900, plano premium",
+        "user_id": "444ddd",
+        "case_id": "CASE-2026-007",
+        "requester_id": "test_user"
+      },
+      "esperado": {
+        "domain": "faturamento",
+        "deve_acionar_hitl": false,
+        "motivo": "Plano premium tem limite de R$ 1000"
+      }
+    },
+    {
+      "nome": "Teste 8 - Múltiplos procedimentos",
+      "descricao": "Testa extração de múltiplos procedimentos e cálculo de valor total",
+      "request": {
+        "input_text": "User: 555eee, Histórico: fez o procedimento 3344, procedimento 5566, medicações A e B, valor total R$ 1500",
+        "user_id": "555eee",
+        "case_id": "CASE-2026-008",
+        "requester_id": "test_user"
+      },
+      "esperado": {
+        "domain": "faturamento",
+        "procedimentos": ["3344", "5566"],
+        "medicacoes": ["A", "B"],
+        "valor_total": 1500,
+        "deve_acionar_hitl": true
+      }
+    },
+    {
+      "nome": "Teste 9 - Caso ambíguo (múltiplos domínios)",
+      "descricao": "Testa como o sistema lida com texto que menciona múltiplos domínios",
+      "request": {
+        "input_text": "Preciso contestar uma fatura de R$ 600 que foi emitida. Quero saber se o procedimento está coberto pelo meu plano.",
+        "user_id": "666fff",
+        "case_id": "CASE-2026-009",
+        "requester_id": "test_user"
+      },
+      "esperado": {
+        "domain": "atendimento ou faturamento",
+        "motivo": "Menciona 'contestar' (atendimento) e 'faturar' (faturamento)"
+      }
+    },
+    {
+      "nome": "Teste 10 - Valor muito alto (auditoria)",
+      "descricao": "Testa regra de auditoria para valores acima de R$ 2000",
+      "request": {
+        "input_text": "User: 777ggg, procedimento 3344, valor total R$ 2500, plano básico",
+        "user_id": "777ggg",
+        "case_id": "CASE-2026-010",
+        "requester_id": "test_user"
+      },
+      "esperado": {
+        "domain": "faturamento",
+        "deve_acionar_hitl": true,
+        "motivo": "Valor acima de R$ 2000 requer auditoria completa"
+      }
+    }
+  ],
+  "instrucoes_uso": {
+    "endpoint": "POST /agent/invoke",
+    "exemplo_curl": "curl -X POST 'http://localhost:8000/agent/invoke' -H 'Content-Type: application/json' -d @test_example.json",
+    "exemplo_python": "import requests\nimport json\n\nwith open('test_example.json', 'r') as f:\n    data = json.load(f)\n    \nresponse = requests.post('http://localhost:8000/agent/invoke', json=data['request'])\nprint(json.dumps(response.json(), indent=2))",
+    "verificar_resposta": [
+      "Verificar se 'intent' corresponde ao domínio esperado",
+      "Verificar se 'retrieved_rules' contém regras do domínio correto",
+      "Verificar se 'domain' está presente nos metadados das regras",
+      "Verificar se 'decision' está correto (auto/hitl/reject)",
+      "Verificar se 'final_result_dict' contém informações esperadas"
+    ]
+  }
+}

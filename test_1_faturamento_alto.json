@@ -1,0 +1,6 @@
+{
+  "input_text": "User: 123abc, preciso faturar um procedimento código 3344 com valor total de R$ 800,00 para o plano premium",
+  "user_id": "123abc",
+  "case_id": "CASE-2026-001",
+  "requester_id": "test_user"
+}

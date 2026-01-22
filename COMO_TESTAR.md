@@ -1,131 +1,216 @@
-# Como Testar/Rodar o Agente LangGraph
+# Como Testar o Sistema após Ingestão
 
-Existem várias formas de testar e rodar seu agente. Aqui estão as principais:
+## Pré-requisitos
 
-## 1. Script Python Simples (Mais Rápido)
+1. ✅ Ingestão concluída: `python scripts/ingest_regras_exemplo.py`
+2. ✅ API rodando: `uvicorn src.agent.api:app --reload` (ou via Docker)
+3. ✅ Qdrant rodando (via Docker Compose)
 
-Use o arquivo `test_agent.py` que foi criado:
+## Formas de Testar
 
-```bash
-python test_agent.py
-```
-
-Este script executa o agente diretamente e mostra o resultado.
-
-## 2. Usando LangGraph Dev Server (Recomendado)
-
-O LangGraph CLI permite rodar um servidor local com interface visual:
+### 1. Usando cURL
 
 ```bash
-langgraph dev
+# Teste 1: Faturamento com valor alto (deve acionar HITL)
+curl -X POST "http://localhost:8000/agent/invoke" \
+  -H "Content-Type: application/json" \
+  -d @test_1_faturamento_alto.json
+
+# Teste 2: Faturamento com valor baixo (deve ser auto)
+curl -X POST "http://localhost:8000/agent/invoke" \
+  -H "Content-Type: application/json" \
+  -d @test_2_faturamento_baixo.json
+
+# Teste 3: Planos e Cobertura
+curl -X POST "http://localhost:8000/agent/invoke" \
+  -H "Content-Type: application/json" \
+  -d @test_3_planos_cobertura.json
 ```
 
-Isso vai:
-- Iniciar um servidor local na porta padrão
-- Abrir o LangGraph Studio (interface visual)
-- Permitir testar o agente através da interface web
-- Hot reload automático quando você modificar o código
-
-**Nota:** Se houver problemas de encoding no Windows, você pode precisar configurar a variável de ambiente:
-```powershell
-$env:PYTHONIOENCODING="utf-8"
-langgraph dev
-```
-
-## 3. Rodar os Testes Existentes
-
-O projeto já tem testes configurados:
-
-```bash
-# Rodar todos os testes
-pytest
-
-# Rodar apenas testes de integração
-pytest tests/integration_tests/
-
-# Rodar apenas testes unitários
-pytest tests/unit_tests/
-```
-
-## 4. Teste Direto no Python (REPL)
-
-Você pode testar diretamente no Python interativo:
+### 2. Usando Python
 
 ```python
-import asyncio
-import sys
-sys.path.insert(0, 'src')
+import requests
+import json
 
-from agent.graph import graph
+# Carregar um dos arquivos de teste
+with open('test_1_faturamento_alto.json', 'r') as f:
+    data = json.load(f)
 
-# Teste simples
-async def test():
-    result = await graph.ainvoke({"changeme": "teste"})
-    print(result)
+# Fazer requisição
+response = requests.post(
+    'http://localhost:8000/agent/invoke',
+    json=data
+)
 
-asyncio.run(test())
-```
+# Ver resultado
+result = response.json()
+print(json.dumps(result, indent=2, ensure_ascii=False))
 
-## 5. Criar um Script Personalizado
-
-Você pode criar seu próprio script de teste em `test_agent.py` ou criar novos scripts:
-
-```python
-import asyncio
-import sys
-sys.path.insert(0, 'src')
-
-from agent.graph import graph
-
-async def main():
-    # Seu código de teste aqui
-    inputs = {"changeme": "seu valor"}
-    config = {"my_configurable_param": "seu parametro"}
-    result = await graph.ainvoke(inputs, config=config)
-    print(result)
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-## Estrutura do Estado e Configuração
-
-### Estado (State)
-O estado inicial deve conter:
-- `changeme`: string (valor inicial)
-
-### Configuração (Context)
-Você pode passar configurações opcionais:
-- `my_configurable_param`: string (parâmetro configurável)
-
-### Exemplo Completo
-
-```python
-import asyncio
-from agent.graph import graph
-
-async def exemplo():
-    # Estado inicial
-    inputs = {
-        "changeme": "valor inicial"
-    }
+# Verificar domínio detectado
+if 'result' in result:
+    intent = result['result'].get('intent', 'N/A')
+    print(f"\n✅ Domínio detectado: {intent}")
     
-    # Configuração opcional
-    config = {
-        "my_configurable_param": "meu valor"
-    }
-    
-    # Executa o grafo
-    resultado = await graph.ainvoke(inputs, config=config)
-    print(resultado)
-
-asyncio.run(exemplo())
+    # Verificar regras recuperadas
+    if 'retrieved_rules' in result['result']:
+        rules = result['result']['retrieved_rules']
+        print(f"📚 Regras encontradas: {len(rules)}")
+        for rule in rules:
+            print(f"  - {rule.get('rule_id', 'N/A')}: {rule.get('domain', 'N/A')}")
 ```
+
+### 3. Usando Postman ou Insomnia
+
+1. Método: `POST`
+2. URL: `http://localhost:8000/agent/invoke`
+3. Headers: `Content-Type: application/json`
+4. Body: Copie o conteúdo de um dos arquivos `test_*.json`
+
+## O que Verificar na Resposta
+
+### Estrutura da Resposta
+
+```json
+{
+  "result": {
+    "intent": "faturamento",  // ← Domínio detectado
+    "entities": {...},         // ← Entidades extraídas
+    "retrieved_rules": [       // ← Regras do RAG filtradas por domínio
+      {
+        "text": "...",
+        "rule_id": "REGRA-FAT-001",
+        "domain": "faturamento",  // ← Domain nos metadados
+        "confidence": 0.92,
+        ...
+      }
+    ],
+    "decision": "hitl",        // ← auto, hitl, ou reject
+    "final_result_dict": {...}
+  },
+  "status": "success",
+  "thread_id": "...",
+  "requires_human_decision": true  // ← true se decision = "hitl"
+}
+```
+
+### Checklist de Validação
+
+- [ ] **Domínio detectado corretamente**
+  - Verificar se `result.intent` corresponde ao domínio esperado
+  - Exemplo: texto sobre faturamento → `intent: "faturamento"`
+
+- [ ] **Regras filtradas por domínio**
+  - Verificar se `retrieved_rules` contém apenas regras do domínio correto
+  - Verificar se `domain` está presente nos metadados de cada regra
+
+- [ ] **Entidades extraídas**
+  - Verificar se `entities` contém procedimentos, valores, planos, etc.
+
+- [ ] **Decisão correta**
+  - Valores altos → `decision: "hitl"`
+  - Valores baixos → `decision: "auto"`
+  - Verificar `requires_human_decision` corresponde à decisão
+
+- [ ] **Logs de debug**
+  - Verificar logs no console da API:
+    - `[DEBUG Interpretation] Detecção determinística: ...`
+    - `[DEBUG Knowledge] Domínio identificado: ...`
+    - `[DEBUG Knowledge] Resultados filtrados por domínio: ...`
+
+## Exemplos de Testes por Domínio
+
+### Faturamento
+
+```bash
+# Valor alto (deve acionar HITL)
+curl -X POST "http://localhost:8000/agent/invoke" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input_text": "User: 123abc, preciso faturar procedimento 3344, valor R$ 800",
+    "user_id": "123abc",
+    "case_id": "CASE-2026-001"
+  }'
+```
+
+**Esperado:**
+- `intent: "faturamento"`
+- `retrieved_rules` com `domain: "faturamento"`
+- `decision: "hitl"` (valor > R$ 500)
+- `requires_human_decision: true`
+
+### Planos e Cobertura
+
+```bash
+curl -X POST "http://localhost:8000/agent/invoke" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input_text": "O procedimento 3344 está coberto pelo plano premium?",
+    "user_id": "789ghi",
+    "case_id": "CASE-2026-003"
+  }'
+```
+
+**Esperado:**
+- `intent: "planos_e_cobertura"`
+- `retrieved_rules` com `domain: "planos_e_cobertura"`
+- Regras sobre cobertura de procedimentos
+
+### Atendimento
+
+```bash
+curl -X POST "http://localhost:8000/agent/invoke" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input_text": "Preciso contestar uma fatura. Tenho uma reclamação.",
+    "user_id": "111aaa",
+    "case_id": "CASE-2026-004"
+  }'
+```
+
+**Esperado:**
+- `intent: "atendimento"`
+- `retrieved_rules` com `domain: "atendimento"` (se houver regras indexadas)
+
+## Troubleshooting
+
+### Problema: Nenhuma regra encontrada
+
+**Possíveis causas:**
+1. Regras não foram indexadas com campo `domain`
+2. Domínio detectado não corresponde ao `domain` das regras
+3. Qdrant não está rodando
+
+**Solução:**
+- Verificar logs: `[DEBUG Knowledge] Encontrados X resultados`
+- Verificar se regras têm `domain` nos metadados
+- Reindexar regras com campo `domain`
+
+### Problema: Domínio incorreto
+
+**Possíveis causas:**
+1. Regras determinísticas não capturaram palavras-chave
+2. LLM classificou incorretamente
+
+**Solução:**
+- Verificar logs: `[DEBUG Interpretation] Detecção determinística: ...`
+- Ajustar palavras-chave em `DOMAIN_RULES` se necessário
+
+### Problema: Filtro não funciona
+
+**Possíveis causas:**
+1. Qdrant não suporta filtros (versão antiga)
+2. Campo `domain` não existe nos metadados
+
+**Solução:**
+- Verificar logs: `[WARNING Qdrant] Erro ao buscar com filtro: ...`
+- Sistema deve fazer fallback para busca sem filtro
+- Verificar se regras têm `domain` nos metadados
 
 ## Próximos Passos
 
-1. **Modificar o agente**: Edite `src/agent/graph.py` para adicionar lógica personalizada
-2. **Adicionar modelo OpenAI**: Integre um modelo LLM usando `langchain-openai`
-3. **Adicionar mais nós**: Crie um fluxo mais complexo com múltiplos nós
-4. **Usar LangGraph Studio**: Use `langgraph dev` para visualizar e debugar seu grafo
-
+1. ✅ Testar todos os domínios
+2. ✅ Validar filtragem por domínio
+3. ✅ Verificar decisões (auto/hitl)
+4. ⏭️ Testar fluxo completo com HITL
+5. ⏭️ Monitorar performance e precisão

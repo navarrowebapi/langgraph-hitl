@@ -67,9 +67,18 @@ def ingest_text_with_metadata(text: str, metadata: dict):
                       "page": "12",
                       "line_range": "89-90",
                       "tipo_regra": "faturamento",
+                      "domain": "faturamento",  # Domínio para Domain Routing (obrigatório)
                       "updated_at": "2024-01-15T10:00:00Z",
                       ...
                   }
+                  
+    Domínios válidos para 'domain':
+    - faturamento: questões relacionadas a valores, faturas, pagamentos
+    - juridico: questões legais, contratos, processos
+    - planos_e_cobertura: questões sobre planos e coberturas de procedimentos
+    - cadastro: alterações e atualizações de dados cadastrais
+    - atendimento: reclamações, solicitações, suporte
+    - outros: casos que não se encaixam nos demais domínios
     """
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=800,

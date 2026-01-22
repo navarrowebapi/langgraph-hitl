@@ -10,10 +10,138 @@ llm = ChatOpenAI(
     temperature=0.7
 )
 
+# Domínios disponíveis para Domain Routing
+AVAILABLE_DOMAINS = [
+    "faturamento",
+    "juridico",
+    "planos_e_cobertura",
+    "cadastro",
+    "atendimento",
+    "outros"
+]
+
+# Regras determinísticas para descoberta rápida de domínio
+DOMAIN_RULES = {
+    "planos_e_cobertura": [
+        "plano", "planos", "cobertura", "coberturas", "benefício", "benefícios",
+        "tabela", "tabelas", "procedimento coberto", "procedimentos cobertos"
+    ],
+    "faturamento": [
+        "valor", "valores", "emitir", "faturar", "faturamento", "fatura",
+        "nota fiscal", "nf", "cobrança", "cobrar", "pagamento", "pagar"
+    ],
+    "atendimento": [
+        "reclamação", "reclamações", "contestar", "contestação", "solicitação",
+        "solicitações", "dúvida", "dúvidas", "atendimento", "suporte",
+        "problema", "problemas", "queixa", "queixas"
+    ],
+    "juridico": [
+        "jurídico", "legal", "lei", "leis", "contrato", "contratos",
+        "processo", "processos", "ação judicial", "advogado", "advogados"
+    ],
+    "cadastro": [
+        "cadastro", "cadastrar", "dados pessoais", "informações pessoais",
+        "alterar cadastro", "atualizar cadastro", "cpf", "rg", "endereço"
+    ]
+}
+
+def _detect_domain_deterministic(text: str) -> str:
+    """
+    Detecta o domínio usando regras determinísticas baseadas em palavras-chave.
+    Retorna o domínio mais provável ou 'outros' se nenhum padrão for encontrado.
+    
+    Usa scoring ponderado: palavras-chave mais específicas têm maior peso.
+    """
+    text_lower = text.lower()
+    
+    # Contar ocorrências de palavras-chave por domínio
+    domain_scores = {}
+    
+    for domain, keywords in DOMAIN_RULES.items():
+        score = 0
+        for keyword in keywords:
+            # Verificar se a palavra-chave está presente no texto
+            # Priorizar palavras completas sobre substrings
+            if keyword in text_lower:
+                # Palavras-chave mais longas (mais específicas) têm maior peso
+                weight = len(keyword.split())  # Multi-word phrases têm mais peso
+                score += weight
+        
+        if score > 0:
+            domain_scores[domain] = score
+    
+    # Retornar domínio com maior score
+    if domain_scores:
+        # Ordenar por score (maior primeiro)
+        sorted_domains = sorted(domain_scores.items(), key=lambda x: x[1], reverse=True)
+        best_domain = sorted_domains[0][0]
+        best_score = sorted_domains[0][1]
+        
+        # Debug: mostrar detecção determinística
+        print(f"[DEBUG Interpretation] Detecção determinística: {best_domain} (score: {best_score})")
+        
+        return best_domain
+    
+    # Se nenhum padrão encontrado, retornar 'outros'
+    print(f"[DEBUG Interpretation] Nenhum padrão encontrado, usando domínio: outros")
+    return "outros"
+
+
+def _refine_domain_with_llm(text: str, suggested_domain: str) -> str:
+    """
+    Usa LLM para validar e refinar a classificação de domínio sugerida pelas regras determinísticas.
+    """
+    domains_list = ", ".join(AVAILABLE_DOMAINS)
+    
+    intent_prompt = f"""Analise o seguinte texto e identifique o domínio/área mais apropriada.
+    
+Domínios disponíveis: {domains_list}
+
+Texto: {text}
+
+Sugestão inicial (baseada em regras): {suggested_domain}
+
+Retorne APENAS o nome do domínio mais apropriado, sem explicações.
+Se a sugestão inicial estiver correta, retorne ela. Caso contrário, retorne o domínio correto."""
+    
+    try:
+        intent_response = llm.invoke(intent_prompt)
+        intent = intent_response.content.strip().lower()
+        
+        # Normalizar resposta da LLM para um dos domínios válidos
+        intent_normalized = intent.replace(" ", "_").replace("-", "_")
+        
+        # Verificar se a resposta está nos domínios válidos
+        for domain in AVAILABLE_DOMAINS:
+            if domain in intent_normalized or intent_normalized in domain:
+                return domain
+        
+        # Se não encontrou correspondência exata, usar a sugestão determinística
+        return suggested_domain
+        
+    except Exception as e:
+        # Em caso de erro na LLM, usar a sugestão determinística
+        print(f"[WARNING Interpretation] Erro ao refinar domínio com LLM: {e}. Usando sugestão determinística: {suggested_domain}")
+        return suggested_domain
+
+
 def interpret(state: WorkflowState) -> WorkflowState:
     """
-    Extrai intenção e entidades do texto de entrada.
-    Usa LLM para análise semântica e regex para extração de valores estruturados.
+    Extrai domínio (intent) e entidades do texto de entrada usando Domain Routing.
+    
+    Processo em duas etapas:
+    1. Detecção determinística: usa regras baseadas em palavras-chave para classificação rápida
+    2. Refinamento com LLM: valida e refina a classificação sugerida
+    
+    Domínios disponíveis:
+    - faturamento: questões relacionadas a valores, faturas, pagamentos
+    - juridico: questões legais, contratos, processos
+    - planos_e_cobertura: questões sobre planos e coberturas de procedimentos
+    - cadastro: alterações e atualizações de dados cadastrais
+    - atendimento: reclamações, solicitações, suporte
+    - outros: casos que não se encaixam nos demais domínios
+    
+    Também extrai entidades estruturadas usando regex (procedimentos, valores, etc.).
     """
     input_text = state.get("input_text", "")
     
@@ -37,30 +165,12 @@ def interpret(state: WorkflowState) -> WorkflowState:
         if case_match:
             case_id = case_match.group(1)
     
-    # Usar LLM para extrair intenção
-    intent_prompt = f"""Analise o seguinte texto e identifique a intenção principal.
-Opções: pode_faturar, quem_paga, precisa_auditoria, pedido_compra, outros.
-
-Texto: {input_text}
-
-Retorne APENAS a intenção, sem explicações:"""
+    # Extrair intenção usando Domain Routing
+    # Passo 1: Análise determinística rápida
+    intent = _detect_domain_deterministic(input_text)
     
-    try:
-        intent_response = llm.invoke(intent_prompt)
-        intent = intent_response.content.strip().lower()
-        # Normalizar intenção
-        if "faturar" in intent or "faturamento" in intent:
-            intent = "pode_faturar"
-        elif "paga" in intent or "pagamento" in intent:
-            intent = "quem_paga"
-        elif "auditoria" in intent:
-            intent = "precisa_auditoria"
-        elif "pedido" in intent or "compra" in intent:
-            intent = "pedido_compra"
-        else:
-            intent = "pode_faturar"  # Default
-    except Exception:
-        intent = "pode_faturar"  # Fallback
+    # Passo 2: Validação e refinamento com LLM
+    intent = _refine_domain_with_llm(input_text, intent)
     
     # Extrair entidades usando regex e LLM
     entities = {}
@@ -107,7 +217,8 @@ Retorne APENAS a intenção, sem explicações:"""
         "entities": entities,
     }
     
-    # Adicionar user_id e case_id apenas se foram encontrados
+    # Preservar user_id e case_id se foram encontrados (do estado inicial ou extraídos do texto)
+    # Isso garante que valores passados pela API sejam preservados no grafo
     if user_id:
         result["user_id"] = user_id
     if case_id:

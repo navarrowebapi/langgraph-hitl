@@ -65,6 +65,8 @@ class AgentRequest(BaseModel):
     config: Optional[dict] = None
     thread_id: Optional[str] = None  # ID do thread para continuar execução
     requester_id: Optional[str] = None
+    user_id: Optional[str] = None  # ID do usuário
+    case_id: Optional[str] = None  # ID do caso
 
 
 class HumanDecisionRequest(BaseModel):
@@ -147,8 +149,8 @@ async def invoke_agent(request: AgentRequest):
         # Preparar o estado inicial
         initial_state: WorkflowState = {
             "input_text": request.input_text,
-            "user_id": None,
-            "case_id": None,
+            "user_id": request.user_id,
+            "case_id": request.case_id,
             "intent": "",
             "entities": {},
             "retrieved_context": "",
@@ -257,8 +259,8 @@ async def stream_agent(request: AgentRequest):
         # Preparar o estado inicial
         initial_state: WorkflowState = {
             "input_text": request.input_text,
-            "user_id": None,
-            "case_id": None,
+            "user_id": request.user_id,
+            "case_id": request.case_id,
             "intent": "",
             "entities": {},
             "retrieved_context": "",

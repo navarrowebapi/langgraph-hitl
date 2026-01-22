@@ -37,7 +37,7 @@ LANGSMITH_API_KEY=lsv2...
 LANGSMITH_PROJECT=new-agent
 
 # PostgreSQL URL (opcional para langgraph dev, mas necessário para a API FastAPI)
-POSTGRES_URL=postgresql://postgres:postgres@localhost:5432/postgres
+
 ```
 
 **Importante:** 

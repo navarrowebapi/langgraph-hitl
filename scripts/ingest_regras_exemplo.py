@@ -90,6 +90,7 @@ def main():
         "page": "1",
         "line_range": "5-6",
         "tipo_regra": "faturamento",
+        "domain": "faturamento",  # Domain Routing: faturamento
         "updated_at": "2024-01-15T10:00:00Z",
         "valid_from": "2024-01-01T00:00:00Z",
         "departamento": "Faturamento"
@@ -114,6 +115,7 @@ def main():
         "page": "1",
         "line_range": "7-8",
         "tipo_regra": "auditoria",
+        "domain": "faturamento",  # Domain Routing: faturamento (auditoria de faturamento)
         "updated_at": "2024-01-15T10:00:00Z",
         "valid_from": "2024-01-01T00:00:00Z",
         "departamento": "Faturamento"
@@ -138,6 +140,7 @@ def main():
         "page": "1",
         "line_range": "9-10",
         "tipo_regra": "faturamento",
+        "domain": "faturamento",  # Domain Routing: faturamento
         "updated_at": "2024-01-15T10:00:00Z",
         "valid_from": "2024-01-01T00:00:00Z",
         "departamento": "Faturamento"
@@ -162,6 +165,7 @@ def main():
         "page": "2",
         "line_range": "15-16",
         "tipo_regra": "cobertura",
+        "domain": "planos_e_cobertura",  # Domain Routing: planos_e_cobertura
         "updated_at": "2024-01-10T14:30:00Z",
         "valid_from": "2024-01-01T00:00:00Z",
         "departamento": "Cobertura"
@@ -186,6 +190,7 @@ def main():
         "page": "2",
         "line_range": "17-18",
         "tipo_regra": "cobertura",
+        "domain": "planos_e_cobertura",  # Domain Routing: planos_e_cobertura
         "updated_at": "2024-01-10T14:30:00Z",
         "valid_from": "2024-01-01T00:00:00Z",
         "departamento": "Cobertura"
@@ -209,6 +214,7 @@ def main():
         "page": "3",
         "line_range": "23-24",
         "tipo_regra": "auditoria",
+        "domain": "faturamento",  # Domain Routing: faturamento (auditoria de faturamento)
         "updated_at": "2024-01-15T10:00:00Z",
         "valid_from": "2024-01-01T00:00:00Z",
         "departamento": "Auditoria"
@@ -233,6 +239,7 @@ def main():
         "page": "1",
         "line_range": "5-6",
         "tipo_regra": "cobertura",
+        "domain": "planos_e_cobertura",  # Domain Routing: planos_e_cobertura
         "updated_at": "2024-01-01T00:00:00Z",
         "valid_from": "2024-01-01T00:00:00Z",
         "departamento": "Cobertura"
@@ -257,6 +264,7 @@ def main():
         "page": "2",
         "line_range": "10-11",
         "tipo_regra": "faturamento",
+        "domain": "faturamento",  # Domain Routing: faturamento
         "updated_at": "2024-01-01T00:00:00Z",
         "valid_from": "2024-01-01T00:00:00Z",
         "departamento": "Faturamento"

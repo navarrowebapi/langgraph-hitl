@@ -5,49 +5,76 @@ from agent.rag.qdrant import search_docs, search_docs_with_metadata
 def retrieve_knowledge(state: WorkflowState) -> WorkflowState:
     """
     Busca regras relevantes no repositório de conhecimento usando RAG.
-    Constrói query semântica a partir de intent e entities.
+    Constrói query semântica combinando input_text completo com intent e entities.
     Retorna regras estruturadas com metadados completos.
     """
-    # Construir query contextualizada a partir de intent e entities
+    input_text = state.get("input_text", "")
     intent = state.get("intent", "")
     entities = state.get("entities", {})
     
-    # Construir query semântica
+    # Construir query semântica combinando texto completo + informações estruturadas
+    # O texto completo fornece contexto semântico rico para embeddings
+    # Intent e entities estruturados ajudam a focar a busca
     query_parts = []
+    
+    # 1. Texto completo como base (mais contexto semântico)
+    if input_text:
+        query_parts.append(input_text)
+    
+    # 2. Adicionar informações estruturadas para dar foco
+    structured_info = []
     if intent:
-        query_parts.append(f"Intenção: {intent}")
+        # Intent agora representa o domínio (faturamento, juridico, planos_e_cobertura, etc.)
+        structured_info.append(f"Domínio identificado: {intent}")
     
     # Adicionar informações relevantes das entidades
     if entities:
-        entity_info = []
         if "procedimentos" in entities:
             procs = entities["procedimentos"]
             if isinstance(procs, list):
-                entity_info.append(f"Procedimentos: {', '.join(map(str, procs))}")
+                structured_info.append(f"Procedimentos mencionados: {', '.join(map(str, procs))}")
             else:
-                entity_info.append(f"Procedimento: {procs}")
+                structured_info.append(f"Procedimento mencionado: {procs}")
         
         if "valor_total" in entities or "valor" in entities:
             valor = entities.get("valor_total") or entities.get("valor", 0)
-            entity_info.append(f"Valor: R$ {valor}")
+            structured_info.append(f"Valor total: R$ {valor}")
         
         if "plano" in entities:
-            entity_info.append(f"Plano: {entities['plano']}")
+            structured_info.append(f"Plano: {entities['plano']}")
         
-        if entity_info:
-            query_parts.append("Contexto: " + ", ".join(entity_info))
+        if "medicacoes" in entities:
+            meds = entities["medicacoes"]
+            if isinstance(meds, list):
+                structured_info.append(f"Medicações: {', '.join(map(str, meds))}")
+            else:
+                structured_info.append(f"Medicação: {meds}")
+        
+        if "localidade" in entities:
+            structured_info.append(f"Localidade: {entities['localidade']}")
     
-    # Se não houver query construída, usar input_text como fallback
-    query = "\n".join(query_parts) if query_parts else state.get("input_text", "")
+    # Combinar tudo em uma query rica
+    if structured_info:
+        query_parts.append("\nInformações estruturadas: " + " | ".join(structured_info))
+    
+    # Query final: texto completo + contexto estruturado
+    query = "\n".join(query_parts) if query_parts else input_text or "buscar regras"
     
     # Buscar regras com metadados completos
+    # Usar filtro por domínio se disponível para melhorar precisão da busca
     try:
         # Debug: imprimir query (pode remover depois)
         print(f"[DEBUG Knowledge] Query construída: {query}")
+        print(f"[DEBUG Knowledge] Domínio identificado: {intent}")
         
-        results = search_docs_with_metadata(query, k=5)
+        # Buscar com filtro por domínio (se intent estiver disponível e não for 'outros')
+        # Filtrar por domínio melhora a precisão ao buscar apenas regras relevantes
+        domain_filter = intent if intent and intent != "outros" else None
+        results = search_docs_with_metadata(query, k=5, domain=domain_filter)
         
         print(f"[DEBUG Knowledge] Encontrados {len(results)} resultados")
+        if domain_filter:
+            print(f"[DEBUG Knowledge] Resultados filtrados por domínio: {domain_filter}")
         
         # Formatar regras estruturadas
         retrieved_rules = []
@@ -61,6 +88,7 @@ def retrieve_knowledge(state: WorkflowState) -> WorkflowState:
                 "line_range": doc.metadata.get("line_range", ""),
                 "confidence": doc.metadata.get("score", 0.0),
                 "tipo_regra": doc.metadata.get("tipo_regra", ""),
+                "domain": doc.metadata.get("domain", ""),  # Incluir domain nos metadados retornados
             }
             retrieved_rules.append(rule)
         
