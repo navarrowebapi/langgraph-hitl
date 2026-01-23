@@ -1,0 +1,38 @@
+POLÍTICA DE TESTE - INGESTÃO MANUAL
+Sistema de Teste - Versão 2024
+
+===========================================
+SEÇÃO 1: REGRAS DE TESTE
+===========================================
+
+REGRA TEST-001: Este é um arquivo de teste para validar a ingestão manual via API. A regra deve ser indexada corretamente no Qdrant.
+
+REGRA TEST-002: Procedimentos de teste com valor acima de R$ 100,00 devem ser aprovados manualmente. Esta regra serve apenas para testes do sistema de ingestão.
+
+REGRA TEST-003: Arquivos de teste não devem ser processados em produção. Esta regra é apenas para validação do parser e serviço de ingestão.
+
+===========================================
+SEÇÃO 2: VALIDAÇÃO DO SISTEMA
+===========================================
+
+REGRA VAL-001: O sistema deve identificar automaticamente o domínio como "faturamento" baseado nas palavras-chave presentes no texto.
+
+REGRA VAL-002: Metadados como rule_id, section, domain e tipo_regra devem ser extraídos automaticamente pelo parser inteligente.
+
+REGRA VAL-003: A ingestão manual via endpoint POST /ingestion/reindex/{filename} deve processar este arquivo corretamente.
+
+===========================================
+SEÇÃO 3: COBERTURA DE TESTES
+===========================================
+
+REGRA COB-TEST-001: Procedimento código 9999 (Teste de Sistema) é coberto para todos os planos de teste. Não requer autorização prévia.
+
+REGRA COB-TEST-002: Testes automatizados devem ser executados diariamente às 6:00 para validar o funcionamento do scheduler.
+
+===========================================
+SEÇÃO 4: AUDITORIA DE TESTES
+===========================================
+
+REGRA AUD-TEST-001: Todos os arquivos de teste devem ser auditados antes de serem indexados no sistema de produção.
+
+REGRA AUD-TEST-002: Casos de teste com valor acima de R$ 50,00 devem passar por validação manual antes da ingestão.

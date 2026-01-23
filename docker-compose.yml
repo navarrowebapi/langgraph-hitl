@@ -69,6 +69,66 @@ services:
       retries: 3
       start_period: 40s
 
+  ingestion-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ingestion-service
+    ports:
+      - "8001:8001"  # API do serviço de ingestão
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - QDRANT_COLLECTION_NAME=empresa_m_regras
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - INGESTION_DOCS_PATH=/app/docs_regras
+      - INGESTION_SCHEDULE_TIME=${INGESTION_SCHEDULE_TIME:-06:00}
+      - INGESTION_API_PORT=8001
+    env_file:
+      - .env
+    volumes:
+      - ./docs_regras:/app/docs_regras  # Montar pasta de documentos
+      - ./services:/app/services  # Montar serviço de ingestão
+      - ./src:/app/src  # Para importar módulos do projeto
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+    networks:
+      - langgraph-network
+    command: python -m uvicorn services.ingestion.api:app --host 0.0.0.0 --port 8001
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  ingestion-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ingestion-scheduler
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - QDRANT_COLLECTION_NAME=empresa_m_regras
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - INGESTION_DOCS_PATH=/app/docs_regras
+      - INGESTION_SCHEDULE_TIME=${INGESTION_SCHEDULE_TIME:-06:00}
+    env_file:
+      - .env
+    volumes:
+      - ./docs_regras:/app/docs_regras  # Montar pasta de documentos
+      - ./services:/app/services  # Montar serviço de ingestão
+      - ./src:/app/src  # Para importar módulos do projeto
+    depends_on:
+      - qdrant
+      - ingestion-service
+    restart: unless-stopped
+    networks:
+      - langgraph-network
+    command: python services/ingestion/scheduler.py
+
 volumes:
   db_data:
     driver: local

@@ -1,5 +1,5 @@
 from agent.graph.state import WorkflowState
-from agent.rag.qdrant import search_docs, search_docs_with_metadata
+from agent.rag.qdrant import search_docs, search_docs_with_metadata, search_docs_hybrid
 
 
 def retrieve_knowledge(state: WorkflowState) -> WorkflowState:
@@ -70,7 +70,34 @@ def retrieve_knowledge(state: WorkflowState) -> WorkflowState:
         # Buscar com filtro por domínio (se intent estiver disponível e não for 'outros')
         # Filtrar por domínio melhora a precisão ao buscar apenas regras relevantes
         domain_filter = intent if intent and intent != "outros" else None
-        results = search_docs_with_metadata(query, k=5, domain=domain_filter)
+        
+        # Extrair keywords das entidades para busca híbrida
+        keywords = []
+        if entities:
+            if "procedimentos" in entities:
+                procs = entities["procedimentos"]
+                if isinstance(procs, list):
+                    keywords.extend([str(p) for p in procs])
+                else:
+                    keywords.append(str(procs))
+            if "medicacoes" in entities:
+                meds = entities["medicacoes"]
+                if isinstance(meds, list):
+                    keywords.extend([str(m) for m in meds])
+                else:
+                    keywords.append(str(meds))
+        
+        # Usar busca híbrida se houver keywords, senão busca semântica simples
+        if keywords:
+            results = search_docs_hybrid(
+                query=query,
+                k=5,
+                domain=domain_filter,
+                keywords=keywords,
+                semantic_weight=0.7  # 70% semântica, 30% keywords
+            )
+        else:
+            results = search_docs_with_metadata(query, k=5, domain=domain_filter)
         
         print(f"[DEBUG Knowledge] Encontrados {len(results)} resultados")
         if domain_filter:
